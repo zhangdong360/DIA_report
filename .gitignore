@@ -17,6 +17,9 @@
 
 # Output files from R
 /*.csv
+/*.xlsx
+/*.ppt
+/*.pptx
 
 # Output files from R CMD check
 /*.Rcheck/
