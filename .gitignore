@@ -15,6 +15,9 @@
 # Output files from R CMD build
 /*.tar.gz
 
+# Output files from R
+/*.csv
+
 # Output files from R CMD check
 /*.Rcheck/
 
