@@ -1,40 +1,59 @@
+# data input ----
+## function ----
+source("02_code/QC_PCA.R")
+source("02_code/QC_boxplot.R")
+source("02_code/QC_heatmap.R")
+source("02_code/run_DE.R")
+source("02_code/run_enrichment_analysis.R")
+## group input ----
+library(readxl)
+data_group <- read_excel("01_rawdata/group.xlsx")
+table(data_group$group)
+data_group <- as.data.frame(data_group)
+value_colour <- c("OED" = "#E64B35FF",# Experimental group
+                  "SCD" = "#4DBBD5FF"# other group1
+)
+rownames(data_group) <- data_group$id
+## DIA matrix input ----
 library(readr)
-data_input <- read_delim("01_data/pg_120min.tsv", 
-                        delim = "\t", escape_double = FALSE, 
-                        trim_ws = TRUE)
-View(data_input)
-data_input <- as.data.frame(data_input)
-sample_id <- c("D1",
-               "D2",
-               "D3",
-               "D4",
-               "WT1",
-               "WT2",
-               "WT3",
-               "WT4")
-sample_group <- c(rep("D",4),
-                  rep("WT",4))
-value_colour <- c("WT" = "#4DBBD5FF",# control group
-                  "D" = "#E64B35FF"# Experimental group
-                  # "virginica" = "#00A087FF",# other group1
-                  # "other group2" = "#3C5488FF"# other group2
-                  )
+library(dplyr)
+data_input <- read_delim("01_rawdata/report.pg_matrix.tsv",
+                         delim = "\t", escape_double = FALSE,
+                         trim_ws = TRUE)
+# 保留前五列注释
+data_anno <- data_input[,1:5]
+data_anno <- as.data.frame(data_anno)
+rownames(data_anno) <- data_anno$Protein.Group
+# 是否进行log2运算？
+data_input[,-1:-5] <- log2(data_input[,-1:-5])
+# 是否进行median normalization运算？
+median_values <- apply(data_input[,-1:-5], 2, median, na.rm = TRUE)
+data_input[,-1:-5] <- data_input[,-1:-5] %>%#除以每列中位数
+  mutate(across(everything() , ~ ./median(., na.rm = TRUE)))
+# 使用此输出进行NA填充，填充网站 https://www.omicsolution.org/wukong/NAguideR/#
+write.csv(data_input,file = "01_rawdata/report.pg_matrix_fill_before.csv")
 
-data_group <- data.frame(id = sample_id,
-                    group = sample_group)
-rownames(data_input) <- data_input$Protein.Names
-data_anno <- data_input[,!colnames(data_input) %in% sample_id]
-data_matrix <- data_input[,colnames(data_input) %in% sample_id]
-data_matrix[is.na(data_matrix)] <- 0
-data_matrix <- data_matrix + 500
-data_before <- data_matrix
+# 将填充后的数据导入
+data_fill <- read_csv("01_rawdata/report.pg_matrix_fill_after.csv")
+data_fill <- as.data.frame(data_fill)
+rownames(data_fill) <- data_fill$Protein.Group
+data_fill <- subset(data_fill,select = -c(`Protein.Group`))
 
+# 如果进行了median normalization运算，运行下面的函数
+data_fill <- sweep(data_fill, 2, median_values, `*`)
+# 如果进行log2处理，运行下面的函数
+data_fill <- 2 ^ data_fill
 # normalization -----------------------------------------------------------
-data_after <- log2(data_matrix)
-column_medians <- apply(data_after, 2, median, na.rm = TRUE)
-target_median <- max(column_medians)  # 目标中位数
-result_adjusted <- data_after
-
+# 设置输出目录
+dir <- "03_result/"
+## intensity normalization ----
+data_before <- log2(data_fill)
+# 计算校正前各样本的intensity median
+column_medians <- apply(data_before, 2, median, na.rm = TRUE)
+column_medians
+# 目标中位数
+target_median <- max(column_medians)
+data_after <- data_before
 for (col in names(data_after)) {
   if (is.numeric(data_after[[col]])) {
     # 防止除以零的情况
@@ -43,277 +62,149 @@ for (col in names(data_after)) {
     }
   }
 }
-
+# 验证校正后各样本intensity median是否一致
 column_medians_2 <- apply(data_after, 2, median, na.rm = TRUE)
-data_after <- 2^data_after
+column_medians_2
+# 返回log2之前的数据
+data_fill_normalization <- 2 ^ data_after
+rm(data_before)
 
+write.csv(data_fill_normalization,file = "01_rawdata/report.pg_matrix_fill_normalization.csv")
 
 # boxplot -----------------------------------------------------------------
+pdf(file = paste0(dir,"QC_boxplot_before.pdf"),
+    width = 6,
+    height = 4)
 
-QC_boxplot <- function(data, data_group, value_colour,title) {
-  
-  library(ggplot2)
-  library(tidyr)
-  
-  data_ggplot <- as.data.frame(t(data))
-  data_ggplot$id <- rownames(data_ggplot)
-  data_ggplot <- merge(data_group,
-                       data_ggplot,
-                    by = 'id')
-  data_ggplot <- tidyr::gather(data_ggplot,key = "key",
-                               value = "value",
-                               -c("id","group")
-  )
-  if (length(value_colour) != length(table(data_ggplot$group))){
-    warning("the length of value_colour is not equal to the length of data_group")
-  }
-  if (length(value_colour) < length(table(data_ggplot$group))){
-    stop("the length of value_colour is less than the length of data_group")
-  }
-  data_ggplot <- data_ggplot[order(data_ggplot$group),]
-  data_ggplot$id <- factor(data_ggplot$id,levels = unique(data_ggplot$id))
-  data_ggplot <- data_ggplot[order(data_ggplot$id),]
-  if (!is.factor(data_ggplot$group)) {
-    data_ggplot$group <- factor(data_ggplot$group)
-  }
-  ggplot(data_ggplot,aes(x = id,
-                         y = log2(value + 500),
-                         fill = group)
-  ) +
-    geom_boxplot() +
-    scale_fill_manual(values = value_colour) +
-    theme_classic() +
-    theme(axis.text.x = element_text(angle = 45,
-                                     hjust = 1,
-                                     colour = "black",
-                                     size = 10),
-          axis.text.y = element_text(hjust = 1,
-                                     colour = "black",
-                                     size = 10),
-          plot.title = element_text(hjust = 0.5)
-    ) +
-    labs(x = "",
-         title = title)
-
-}
-QC_boxplot(data_before,
-           data_group = data_group,
-           value_colour = value_colour,
-           title = "rawdata")
-QC_boxplot(data_after,
-           data_group = data_group,
+QC_boxplot(data_before,data_group = data_group,
            value_colour = value_colour,
            title = "normalized data")
-
+dev.off()
+pdf(file = paste0(dir,"QC_boxplot_normalization.pdf"),
+    width = 6,
+    height = 4)
+QC_boxplot(data_fill_normalization,data_group = data_group,
+           value_colour = value_colour,
+           title = "normalized data")
+dev.off()
 # heatmap -----------------------------------------------------------------
 
-QC_heatmap <- function(data,data_group,value_colour){
-  library(tidyr)
-  library(dplyr)
-  data_pre <- as.data.frame(t(data))
-  data_pre$id <- rownames(data_pre)
-  data_pre <- merge(data_group,
-                    data_pre,
-                    by = 'id')
-  rownames(data_pre) <- data_pre$id
-   data_heatmap <- data_pre %>%
-    subset(.,select = (-c(group,id))) %>%
-    t() %>%
-    as.data.frame() %>%
-     {log2((. + 1))}
-  library(pheatmap)
-  # annotation_col requirements:
-  # 1.the annotation_col must be a data frame
-  # 2.the row names of annotation_col == the column names of data_heatmap
-  # 3.the column names of annotation_col is the annotation legend name
-  #
-  # annotation_colors requirements:
-  # 1.the annotation_colors must be a list.
-  # 2.if the group is more than two, you can add by format.
-  annotation_heatmap <- data_pre %>%
-    select(group)
-  
-  annotation_colors <- list(group = value_colour)
-  pheatmap(data_heatmap,
-           show_rownames = F,
-           annotation_col = annotation_heatmap,
-           annotation_colors = annotation_colors,
-           scale = "row")
-}
-
-QC_heatmap(data = data_before,
-           data_group = data_group,
+pdf(file = paste0(dir,"QC_heatmap_before.pdf"),
+    width = 6,
+    height = 6)
+QC_heatmap(data = data_before,data_group = data_group,
            value_colour = value_colour)
-
-QC_heatmap(data = data_after,
-           data_group = data_group,
+dev.off()
+pdf(file = paste0(dir,"QC_heatmap_normalization.pdf"),
+    width = 6,
+    height = 6)
+QC_heatmap(data = data_fill_normalization,data_group = data_group,
            value_colour = value_colour)
+dev.off()
 
 # PCA ---------------------------------------------------------------------
-QC_PCA <- function(data,data_group,value_colour){
-  library(FactoMineR)
-  library(factoextra)
-  library(tidyr)
-  library(dplyr)
-  data_pre <- as.data.frame(t(data))
-  data_pre$id <- rownames(data_pre)
-  data_pre <- merge(data_group,
-                    data_pre,
-                    by = 'id')
-  rownames(data_pre) <- data_pre$id
-  group_list <- data_pre$group
-  dat.pca <- data_pre %>%
-    subset(.,select = -c(group,id)) %>%
-    PCA(.,graph = FALSE)
-  fviz_pca_ind(dat.pca,
-               geom.ind = c("text","point"), # show points only (nbut not "text")
-               col.ind = group_list, # color by groups
-               palette = value_colour,
-               addEllipses = TRUE, # Concentration ellipses
-               legend.title = "Groups"
-  )
-}
-
+pdf(file = paste0(dir,"QC_pca_before.pdf"),
+    width = 5,
+    height = 5)
 QC_PCA(data = data_before,
        data_group = data_group,
        value_colour = value_colour)
-
-QC_PCA(data = data_after,
+dev.off()
+pdf(file = paste0(dir,"QC_pca_normalization.pdf"),
+    width = 5,
+    height = 5)
+QC_PCA(data = data_fill_normalization,
        data_group = data_group,
        value_colour = value_colour)
+dev.off()
 # DE ----------------------------------------------------------------------
+# 注意，data和data_anno的行名应一致
+# 根据分组选择要进行差异分析的组别
+table(data_group$group)
+# group 1为实验组
+# group 2为对照组
+group_1 <- "OED"
+group_2 <- "SCD"
+result_merge <- run_DE(data = data_fill_normalization,
+                       data_group = data_group,
+                       log2 = T,
+                       data_anno = data_anno,
+                       group_1 = group_1,group_2 = group_2,
+                       dir = "03_result/DE/")
 
-library(limma)
-group <- factor(data_group$group,levels = c("D","WT"))
-
-limma_design<-model.matrix(~-1+group)
-
-rownames(limma_design) <- data_group$id
-
-limma_expr <- data
-
-limma_expr <- log2(limma_expr)
-
-contrast.matrix<-makeContrasts(contrasts = "groupD-groupWT",
-                               levels = limma_design)  
-
-fit <- lmFit(limma_expr,limma_design)   
-
-fit1 <- contrasts.fit(fit, contrast.matrix)  
-
-fit2 <- eBayes(fit1,0.01)    
-
-tempOutput = topTable(fit2, 
-                      coef = "groupD-groupWT", 
-                      number = nrow(fit2),
-                      lfc = log2(1),
-                      adjust.method = "fdr")
-
-dif <- tempOutput[tempOutput[,"adj.P.Val"] < 0.05,]
-sd(tempOutput$logFC)
-
-dif_logFC <- dif[abs(dif[,"logFC"]) > sd(tempOutput$logFC)*3,]
-
-tempOutput$`Protein.Names` <- rownames(tempOutput) 
-data_after$`Protein.Names` <- rownames(data_after)
-result_merge <- merge(data_after,
-                      tempOutput,
-                      by = "Protein.Names")
-result_merge <- merge(data_anno,
-                      result_merge,
-                      by = "Protein.Names")
-tempOutput <- subset(tempOutput,select = -`Protein.Names`)
-data_after <- subset(data_after,select = -`Protein.Names`)
-write.csv(result_merge,file = "result.csv")
 # volcano plot ------------------------------------------------------------
-
 library(ggplot2)
-
 library(ggrepel)
-
 library(dplyr)
+library(readr)
 
-y <- rownames(dif_logFC)
-anno_gene_symbol <- unlist(lapply(y,function(y) strsplit(as.character(y),"_")[[1]][1]))
-Gene <- as.data.frame(anno_gene_symbol)
-res_data <- tempOutput
+dif_logFC_up <- subset(result_merge,result_merge$logFC > 0)
+dif_logFC_up <- dif_logFC_up[order(dif_logFC_up$logFC,decreasing = T),]
+dif_logFC_down <- subset(result_merge,result_merge$logFC < 0)
+dif_logFC_down <- dif_logFC_down[order(dif_logFC_down$logFC),]
+
+# y <- c(rownames(dif_logFC_up)[1:10],rownames(dif_logFC_down)[1:10])
+# y <- na.omit(y)
+
+res_data <- result_merge
 data <- res_data[res_data[,"adj.P.Val"] <= 1,]
 
-y <- rownames(data)
-gene <- unlist(lapply(y,function(y) strsplit(as.character(y),"_")[[1]][1]))
+y <- result_merge$Genes
+gene <- unlist(lapply(y,function(y) strsplit(as.character(y),";")[[1]][1]))
 data$gene <- gene
 # 颜色划分padj <0.05，且log2FC绝对值大于sd(tempOutput$logFC)*3
-data$sig[data$`adj.P.Val` >= 0.05 | abs(data$logFC) < sd(tempOutput$logFC)*3] <- "Not"
+data$sig[data$adj.P.Val >= 0.05 | abs(data$logFC) < 0] <- "Not"
 
-data$sig[data$`adj.P.Val` < 0.05 & data$logFC >= sd(tempOutput$logFC)*3] <- "Up"
+data$sig[data$adj.P.Val < 0.05 & data$logFC >= 0] <- "Up"
 
-data$sig[data$`adj.P.Val` < 0.05 & data$logFC <= -sd(tempOutput$logFC)*3] <- "Down"
+data$sig[data$adj.P.Val < 0.05 & data$logFC <= -0] <- "Down"
 input <- data
-
-volc <- ggplot(data = data, aes(x = logFC, 
-                                y = -log10(`adj.P.Val`),
+library(ggrepel)
+library(ggplot2)
+volc <- ggplot(data = data, aes(x = logFC,
+                                y = -log10(adj.P.Val),
                                 color = sig)) +
-  theme_classic() +
-  geom_point(alpha = 0.9) +
-  theme_set(theme_bw()) + 
-  theme(panel.grid = element_blank(),strip.text = element_blank()) +
+  geom_point(alpha = 0.9) +  theme_classic() +
+  theme(panel.grid = element_blank(),strip.text = element_blank(),
+        plot.title = element_text(hjust = 0.5)) +
   scale_color_manual(values = c("#4DBBD5","grey80","#E64B35")) +
   geom_hline(yintercept = -log10(0.05),lty = 4,lwd = 0.6,alpha = 0.8) +
-  geom_vline(xintercept = c(-sd(tempOutput$logFC)*3,sd(tempOutput$logFC)*3),lty = 4,lwd = 0.6,alpha = 0.8) +
-  labs(title = "D vs WT") +
-  theme(plot.title = element_text(hjust = 0.5))
 
-
+  labs(title = paste0(group_1,"-",group_2))
 volc
 
-volc + geom_text_repel(data = data[data$gene %in% Gene[,1],], aes(label=gene),size = 3,max.overlaps = 50)
+
+
+## 标记火山图 ----
+library(readxl)
+list <- read_xlsx("01_rawdata/A list of positive control proteins.xlsx")
+y <- list$`UniProt accession`
+anno_gene_symbol <- unlist(lapply(y,function(y) strsplit(as.character(y),"_")[[1]][1]))
+Gene <- as.data.frame(anno_gene_symbol)
+library(readr)
+rownames(result_merge) <- result_merge$Protein.Names
+
+volc +
+  geom_text_repel(data = data[data$Protein.Group %in% Gene[,1],],
+                       aes(label=gene),
+                  size = 3,
+                  color = "black",
+                  max.overlaps = 50) +
+  geom_point(data = data[data$Protein.Group %in% Gene[,1],],
+             alpha = 0.9,color = "black")
+ggsave(plot = last_plot(),filename = paste0(dir,"volc.pdf"),
+       height = 5,
+       width = 6)
 
 # KEGG GO -----------------------------------------------------------------
-library(clusterProfiler)
-library(pathview)
-library(org.Hs.eg.db)
-library(ggplot2)
-
-GeneSymbol <- subset(tempOutput,`adj.P.Val`< 0.05)
-GeneSymbol <- subset(GeneSymbol,logFC > 0)
-
-data <- data_anno[data_anno$Protein.Names %in% rownames(GeneSymbol) ,]
-GeneSymbol <- data$Genes
-gene.symbol.eg <- id2eg(ids = GeneSymbol, category = 'SYMBOL', org = 'Hs',na.rm = F) #如果是小鼠，就是Mm
-gene.symbol.eg <- as.data.frame(gene.symbol.eg)
-
-## GO分析 ----
-kkd <- enrichGO(gene = gene.symbol.eg$ENTREZID,
-                "org.Hs.eg.db",
-                ont = "ALL",
-                qvalueCutoff = 0.05,
-                readable = TRUE) #如果是小鼠，就是Mm,out可选"ALL", "CC", "BP", "MF"
-write.csv(kkd@result,file = "GO_up.csv",quote = F,row.names = F)
-# 条形图
-barplot(kkd,drop = T,showCategory = 6,split="ONTOLOGY") + facet_grid(ONTOLOGY~., scale='free',space = 'free') 
-# 气泡图
-dotplot(kkd,showCategory = 6,split="ONTOLOGY") + facet_grid(ONTOLOGY~., scale='free',space = 'free') 
-#BiocManager::install('ggnewscale')
-# 网络图
-# cnetplot(kkd,categorySize = "star",foldChange = geneFC)
-
-cnetplot(kkd,layout = 'star',foldChange = geneFC,colorEdge = T )
+GeneSymbol <- subset(result_merge,adj.P.Val< 0.05)
+# GeneSymbol$Genes <- GeneSymbol$GN
+y <- GeneSymbol$Genes
+gene <- unlist(lapply(y,function(y) strsplit(as.character(y),";")[[1]][1]))
 
 
-## KEGG分析 ----
 
-kk <- enrichKEGG(gene = gene.symbol.eg$ENTREZID,organism = "hsa",keyType = "kegg",qvalueCutoff = 0.05)   #如果是小鼠，就是mouse
-write.csv(kk@result,file = "KEGG_up.csv",quote = F,row.names = F)
-kk@result$geneID <- gsub("/",",",kk@result$geneID)#更改基因间隔符号，否则没有logfc
-# 条形图
-barplot(kk,drop=T,showCategory = 10)
-# 气泡图
-dotplot(kk)
-kk_plot <- as.data.frame(kk@result)
-kk <- enrichKEGG(gene = mer$ENTREZID,organism = "hsa",keyType = "kegg",qvalueCutoff = 0.05) 
-library(DOSE)
-#如果原始的ID号为entrez gene id那么这里keyType设置为ENTREZID
-ego2<-setReadable(kk, OrgDb = org.Hs.eg.db, keyType="ENTREZID")
-# 网络图
-cnetplot(ego2,layout = 'star',foldChange = geneFC,colorEdge = T)
+# 样本为人，OrgDb为Hs
+# 样本为小鼠，OrgDb为Mm
+run_enrichment_analysis(data = GeneSymbol,OrgDb = "Hs",dir = paste0("03_result/DE/",group_1,"_vs_",group_2,"/"))
 
