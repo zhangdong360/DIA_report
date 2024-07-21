@@ -29,7 +29,7 @@ rownames(data_input) <- data_input$Protein.Group
 data_anno <- data_input[,1:5]
 data_anno <- as.data.frame(data_anno)
 rownames(data_anno) <- data_anno$Protein.Group
-
+data_input <- data_input[,-1:-5]
 
 ## NAguideR ----
 # 是否进行log2运算？
