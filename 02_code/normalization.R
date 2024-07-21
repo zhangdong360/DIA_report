@@ -7,7 +7,8 @@ source("02_code/run_DE.R")
 source("02_code/run_enrichment_analysis.R")
 ## group input ----
 library(readxl)
-data_group <- read_excel("01_rawdata/group.xlsx")
+library(ggplot2)
+data_group <- read_excel("../DIA/")
 table(data_group$group)
 data_group <- as.data.frame(data_group)
 value_colour <- c("OED" = "#E64B35FF",# Experimental group
@@ -17,13 +18,18 @@ rownames(data_group) <- data_group$id
 ## DIA matrix input ----
 library(readr)
 library(dplyr)
-data_input <- read_delim("01_rawdata/report.pg_matrix.tsv",
+data_input <- read_delim("../DIA/Qian_lab_3/01_rawdata/report.pg_matrix.tsv",
                          delim = "\t", escape_double = FALSE,
                          trim_ws = TRUE)
+data_input <- as.data.frame(data_input)
+rownames(data_input) <- data_input$Protein.Group
 # 保留前五列注释
 data_anno <- data_input[,1:5]
 data_anno <- as.data.frame(data_anno)
 rownames(data_anno) <- data_anno$Protein.Group
+
+
+## NAguideR ----
 # 是否进行log2运算？
 data_input[,-1:-5] <- log2(data_input[,-1:-5])
 # 是否进行median normalization运算？
@@ -43,6 +49,24 @@ data_fill <- subset(data_fill,select = -c(`Protein.Group`))
 data_fill <- sweep(data_fill, 2, median_values, `*`)
 # 如果进行log2处理，运行下面的函数
 data_fill <- 2 ^ data_fill
+## 10minimum fill ----
+intensity_all_protein <- data.frame(Protein.Group = data_input$Protein.Group,
+                        intensity = rowMeans(data_input[,-1:-5],na.rm = T))
+intensity = rowMeans(data_input[,-1:-5],na.rm = T)
+intensity <- na.omit(intensity)
+intensity <- sort(intensity)
+intensity_10 <- quantile(intensity, 0.1)
+intensity_10
+log2(intensity_10)
+ggplot(intensity, aes(x = log2(intensity))) + 
+  geom_density(color = "black", fill = "gray")
+
+# 将第6列到最后一列的所有NA值替换为0
+data_input[,-1:-5][is.na(data_input[,-1:-5])] <- 0
+
+# 将第6列到最后一列的所有值加100000
+data_input[,-1:-5] <- data_input[,-1:-5] + 100000
+data_fill <- data_input[,-1:-5]
 # normalization -----------------------------------------------------------
 # 设置输出目录
 dir <- "03_result/"
@@ -123,8 +147,8 @@ dev.off()
 table(data_group$group)
 # group 1为实验组
 # group 2为对照组
-group_1 <- "OED"
-group_2 <- "SCD"
+group_1 <- "FL_9S"
+group_2 <- "FL_non"
 result_merge <- run_DE(data = data_fill_normalization,
                        data_group = data_group,
                        log2 = T,
@@ -147,22 +171,22 @@ dif_logFC_down <- dif_logFC_down[order(dif_logFC_down$logFC),]
 # y <- na.omit(y)
 
 res_data <- result_merge
-data <- res_data[res_data[,"adj.P.Val"] <= 1,]
+data <- res_data[res_data[,"P.Value"] <= 1,]
 
 y <- result_merge$Genes
 gene <- unlist(lapply(y,function(y) strsplit(as.character(y),";")[[1]][1]))
 data$gene <- gene
 # 颜色划分padj <0.05，且log2FC绝对值大于sd(tempOutput$logFC)*3
-data$sig[data$adj.P.Val >= 0.05 | abs(data$logFC) < 0] <- "Not"
+data$sig[data$P.Value >= 0.05 | abs(data$logFC) < 0] <- "Not"
 
-data$sig[data$adj.P.Val < 0.05 & data$logFC >= 0] <- "Up"
+data$sig[data$P.Value < 0.05 & data$logFC >= 0] <- "Up"
 
-data$sig[data$adj.P.Val < 0.05 & data$logFC <= -0] <- "Down"
+data$sig[data$P.Value < 0.05 & data$logFC <= -0] <- "Down"
 input <- data
 library(ggrepel)
 library(ggplot2)
 volc <- ggplot(data = data, aes(x = logFC,
-                                y = -log10(adj.P.Val),
+                                y = -log10(P.Value),
                                 color = sig)) +
   geom_point(alpha = 0.9) +  theme_classic() +
   theme(panel.grid = element_blank(),strip.text = element_blank(),
@@ -206,5 +230,8 @@ gene <- unlist(lapply(y,function(y) strsplit(as.character(y),";")[[1]][1]))
 
 # 样本为人，OrgDb为Hs
 # 样本为小鼠，OrgDb为Mm
-run_enrichment_analysis(data = GeneSymbol,OrgDb = "Hs",dir = paste0("03_result/DE/",group_1,"_vs_",group_2,"/"))
+run_enrichment_analysis(data = GeneSymbol,
+                        OrgDb = "Hs",
+                        dir = paste0("03_result/DE/",
+                                     group_1,"_vs_",group_2,"/"))
 
