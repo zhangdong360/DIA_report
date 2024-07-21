@@ -8,17 +8,19 @@ source("02_code/run_enrichment_analysis.R")
 ## group input ----
 library(readxl)
 library(ggplot2)
-data_group <- read_excel("../DIA/")
+# 导入分组信息
+data_group <- read_excel("./01_data/group.xlsx")
 table(data_group$group)
 data_group <- as.data.frame(data_group)
-value_colour <- c("OED" = "#E64B35FF",# Experimental group
-                  "SCD" = "#4DBBD5FF"# other group1
+# 配色设置
+value_colour <- c("D" = "#E64B35FF",# Experimental group
+                  "WT" = "#4DBBD5FF"# other group1
 )
 rownames(data_group) <- data_group$id
 ## DIA matrix input ----
 library(readr)
 library(dplyr)
-data_input <- read_delim("../DIA/Qian_lab_3/01_rawdata/report.pg_matrix.tsv",
+data_input <- read_delim("./01_data/pg_120min.tsv",
                          delim = "\t", escape_double = FALSE,
                          trim_ws = TRUE)
 data_input <- as.data.frame(data_input)
@@ -94,6 +96,7 @@ data_fill_normalization <- 2 ^ data_after
 rm(data_before)
 
 write.csv(data_fill_normalization,file = "01_rawdata/report.pg_matrix_fill_normalization.csv")
+
 
 # boxplot -----------------------------------------------------------------
 pdf(file = paste0(dir,"QC_boxplot_before.pdf"),
