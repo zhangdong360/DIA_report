@@ -152,7 +152,7 @@ table(data_group$group)
 # group 2为对照组
 group_1 <- "FL_9S"
 group_2 <- "FL_non"
-result_merge <- run_DE(data = data_fill_normalization,
+result_merge <- run_DE(data_fill = data_fill_normalization,
                        data_group = data_group,
                        log2 = T,
                        data_anno = data_anno,
