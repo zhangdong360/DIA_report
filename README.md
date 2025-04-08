@@ -1,5 +1,6 @@
 # DIA_report
- 此项目为DIANN下机数据处理
+
+此项目为DIANN下机数据处理
 
 ## 功能实现
 
@@ -13,13 +14,11 @@
 
 ## function
 
-
-
 ### run_DE()
 
 `run_DE()`函数使用如下：
 
-```R
+``` r
 # DE ----------------------------------------------------------------------
 # 注意，data和data_anno的行名应一致
 # 根据分组选择要进行差异分析的组别
@@ -34,7 +33,6 @@ result_merge <- run_DE(data_fill = data_fill_normalization, # 填充后蛋白矩
                        data_anno = data_anno, # 蛋白注释信息
                        group_1 = group_1,group_2 = group_2,
                        dir = "03_result/DE/")
-
 ```
 
 `run_DE()`为**limma**运行流程。
@@ -47,7 +45,7 @@ result_merge <- run_DE(data_fill = data_fill_normalization, # 填充后蛋白矩
 
 `run_enrichment()`函数使用如下：
 
-```R
+``` r
 result_enrich_pre <- run_enrichment_analysis(data = GeneSymbol, #Genes column为gene symbol，logFC为差异倍数
                         OrgDb = "Hs", # human为Hs，mouse为Mm，Danio rerio为Dr
                         dir = paste0(DE_dir,
@@ -64,3 +62,46 @@ result_enrich_pre <- run_enrichment_analysis(data = GeneSymbol, #Genes column为
 `run_enrichment()`函数需存在Genes列为gene symbol，logFC为差异倍数。
 
 `run_enrichment()`运行后会在`dir`目录下生成对应通路富集结果和log日志。如果存在某个通路富集无结果，请关闭对应通路富集分析开关后重新运行该函数。
+
+### seqknn()
+
+`seqknn()`函数使用如下：
+
+``` R
+# install.packages("multiUS")
+library(multiUS)
+# 输入原始蛋白表达矩阵
+NA_ratio <-   colSums(is.na(data_input))/dim(data_input)[1]
+NA_ratio <- as.data.frame(NA_ratio)
+NA_ratio$Samples <- rownames(NA_ratio)
+
+NA_ratio[NA_ratio$NA_ratio < 0.2,"group"] <- "Good"
+NA_ratio[NA_ratio$NA_ratio < 0.5&NA_ratio$NA_ratio > 0.2,"group"] <- "OK"
+NA_ratio[NA_ratio$NA_ratio < 0.8&NA_ratio$NA_ratio > 0.5,"group"] <- "Bad"
+NA_ratio[NA_ratio$NA_ratio > 0.8,"group"] <- "Remove"
+NA_ratio$group <- factor(NA_ratio$group,levels = c("Good","OK","Bad","Remove"))
+library(ggplot2)
+# 绘制每个样本的缺失值比例条形图
+ggplot(NA_ratio,aes(x = NA_ratio, y = reorder(Samples,NA_ratio,decreasing = T), fill = group)) + 
+  geom_bar(stat = "identity", color = "black") + 
+  geom_text(aes(label = sprintf("%.2f", NA_ratio)), hjust = -0.5) + 
+  scale_fill_manual(values = c("Good" = "#62c882",
+                               "OK" = "#b5e281",
+                               "Bad" = "#febe80",
+                               "Remove" = "#bb2022")) + 
+  theme_bw() + 
+  labs( x = "Number of missing rows",
+        y = "Samples")
+# 设定缺失值删除比例
+cutoff_NA_ratio <- 0.5 #defult
+
+NA_ratio_protein <- as.data.frame(rowSums(is.na(data_input))/dim(data_input)[2])
+colnames(NA_ratio_protein) <- "NA_ratio_protein"
+NA_ratio_protein$Protein.Group <- rownames(NA_ratio_protein)
+NA_ratio_protein <- NA_ratio_protein[NA_ratio_protein$NA_ratio_protein < cutoff_NA_ratio,]
+# NA_ratio_protein$protein_group <- rownames(NA_ratio_protein)
+data <- data_input[rownames(data_input)%in%rownames(NA_ratio_protein),]
+# 使用seqknn方法进行填充
+data_fill <- multiUS::seqKNNimp(data = data,k = 10)
+write.csv(data_fill,file = "01_rawdata/20241107_2ndDS/20241107_2ndDS/report.pg_matrix_fill_after.csv")
+```
