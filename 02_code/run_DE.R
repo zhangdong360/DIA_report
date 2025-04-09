@@ -51,16 +51,19 @@ run_DE <- function(data_fill,data_raw, data_group, data_anno=NULL,log2=TRUE,grou
                         tempOutput,
                         by = 0)
   rownames(result_merge) <- result_merge$Row.names
-  if (!is.null(data_anno)){
+  if (!is.null(data_raw)){
     result_merge <- subset(result_merge,select = -c(`Row.names`))
     result_merge <- merge(data_raw,
                           result_merge,
                           by = 0)
     rownames(result_merge) <- result_merge$Row.names
+  }
+  if (!is.null(data_anno)){
     result_merge <- subset(result_merge,select = -c(`Row.names`))
     result_merge <- merge(data_anno,
                           result_merge,
                           by = 0)
+    rownames(result_merge) <- result_merge$Row.names
   }
   result_merge <- subset(result_merge,select = -c(`Row.names`))
   write.csv(result_merge,file = paste0(output_dir,"/result_DE",paste0("_",levels(group)[1],"-",levels(group)[2]),".csv"))
