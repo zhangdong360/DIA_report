@@ -46,7 +46,14 @@ result_merge <- run_DE(data_fill = data_fill_normalization, # 填充后蛋白矩
 `run_enrichment()`函数使用如下：
 
 ``` r
-result_enrich_pre <- run_enrichment_analysis(data = GeneSymbol, #Genes column为gene symbol，logFC为差异倍数
+# 根据上述limma DE结果，选择adj.P.Val或P.Value
+GeneSymbol <- subset(result_merge,adj.P.Val< 0.05)
+# GeneSymbol$Genes <- GeneSymbol$GN
+y <- GeneSymbol$Genes
+GeneSymbol$Genes <- unlist(lapply(y,function(y) strsplit(as.character(y),";")[[1]][1]))
+
+
+result_enrich_pre <- run_enrichment_analysis(data = GeneSymbol, #column中Genes为gene symbol，logFC为差异倍数
                         OrgDb = "Hs", # human为Hs，mouse为Mm，Danio rerio为Dr
                         dir = paste0(DE_dir,
                                      group_1,"_vs_",group_2,"/"),
