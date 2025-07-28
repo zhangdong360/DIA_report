@@ -1,7 +1,7 @@
 run_enrichment_analysis <- function(data, OrgDb, dir, 
-                                   do_down_GO = TRUE, do_down_KEGG = TRUE,
-                                   do_up_GO = TRUE, do_up_KEGG = TRUE,
-                                   do_all_GO = FALSE, do_all_KEGG = FALSE) {
+                                    do_down_GO = TRUE, do_down_KEGG = TRUE,
+                                    do_up_GO = TRUE, do_up_KEGG = TRUE,
+                                    do_all_GO = FALSE, do_all_KEGG = FALSE) {
   library(clusterProfiler)
   library(pathview)
   library(ggplot2)
@@ -73,22 +73,22 @@ run_enrichment_analysis <- function(data, OrgDb, dir,
         message(paste0("  → 进行", analysis_type, "GO富集分析..."))
         if (OrgDb == "Hs") {
           kkd <- enrichGO(gene = gene.symbol.eg$ENTREZID,
-                         OrgDb = "org.Hs.eg.db",
-                         ont = "ALL",
-                         qvalueCutoff = 0.05,
-                         readable = TRUE)
+                          OrgDb = "org.Hs.eg.db",
+                          ont = "ALL",
+                          qvalueCutoff = 0.05,
+                          readable = TRUE)
         } else if (OrgDb == "Mm") {
           kkd <- enrichGO(gene = gene.symbol.eg$ENTREZID,
-                         OrgDb = "org.Mm.eg.db",
-                         ont = "ALL",
-                         qvalueCutoff = 0.05,
-                         readable = TRUE)
+                          OrgDb = "org.Mm.eg.db",
+                          ont = "ALL",
+                          qvalueCutoff = 0.05,
+                          readable = TRUE)
         } else if (OrgDb == "Dr") {
           kkd <- enrichGO(gene = gene.symbol.eg$ENTREZID,
-                         OrgDb = "org.Dr.eg.db",
-                         ont = "ALL",
-                         qvalueCutoff = 0.05,
-                         readable = TRUE)
+                          OrgDb = "org.Dr.eg.db",
+                          ont = "ALL",
+                          qvalueCutoff = 0.05,
+                          readable = TRUE)
         }
         
         if (!is.null(kkd) && nrow(kkd@result) == 0) {
@@ -158,7 +158,7 @@ run_enrichment_analysis <- function(data, OrgDb, dir,
       if (do_down_GO && !is.null(kkd_down)) {
         tryCatch({
           message("  → 输出下调基因GO分析结果...")
-          write.csv(kkd_down@result, file = paste0(dir, "/GO_down.csv"), quote = F, row.names = F)
+          write.table(kkd_down@result, file = paste0(dir, "/GO_down.tsv"),sep = "\t",row.names = F)
           pdf(file = paste0(dir, "/GO_down.pdf"), width = 6, height = 7)
           p1 <- dotplot(kkd_down, showCategory = 5, split = "ONTOLOGY") + facet_grid(ONTOLOGY ~ ., scale = 'free', space = 'free')
           print(p1)
@@ -173,7 +173,7 @@ run_enrichment_analysis <- function(data, OrgDb, dir,
       if (do_down_KEGG && !is.null(kk_down)) {
         tryCatch({
           message("  → 输出下调基因KEGG分析结果...")
-          write.csv(kk_down@result, file = paste0(dir, "/KEGG_down.csv"), quote = F, row.names = F)
+          write.table(kk_down@result, file = paste0(dir, "/KEGG_down.tsv"),sep = "\t",row.names = F)
           pdf(file = paste0(dir, "/KEGG_down.pdf"), width = 6, height = 5)
           p2 <- dotplot(kk_down)
           print(p2)
@@ -207,7 +207,7 @@ run_enrichment_analysis <- function(data, OrgDb, dir,
       if (do_up_GO && !is.null(kkd_up)) {
         tryCatch({
           message("  → 输出上调基因GO分析结果...")
-          write.csv(kkd_up@result, file = paste0(dir, "/GO_up.csv"), quote = F, row.names = F)
+          write.table(kkd_up@result, file = paste0(dir, "/GO_up.tsv"),sep = "\t",row.names = F)
           pdf(file = paste0(dir, "/GO_up.pdf"), width = 6, height = 7)
           p3 <- dotplot(kkd_up, showCategory = 5, split = "ONTOLOGY") + facet_grid(ONTOLOGY ~ ., scale = 'free', space = 'free')
           print(p3)
@@ -222,7 +222,7 @@ run_enrichment_analysis <- function(data, OrgDb, dir,
       if (do_up_KEGG && !is.null(kk_up)) {
         tryCatch({
           message("  → 输出上调基因KEGG分析结果...")
-          write.csv(kk_up@result, file = paste0(dir, "/KEGG_up.csv"), quote = F, row.names = F)
+          write.table(kk_up@result, file = paste0(dir, "/KEGG_up.tsv"),sep = "\t",row.names = F)
           pdf(file = paste0(dir, "/KEGG_up.pdf"), width = 6, height = 5)
           p4 <- dotplot(kk_up)
           print(p4)
@@ -256,7 +256,7 @@ run_enrichment_analysis <- function(data, OrgDb, dir,
       if (do_all_GO && !is.null(kkd_all)) {
         tryCatch({
           message("  → 输出全部基因GO分析结果...")
-          write.csv(kkd_all@result, file = paste0(dir, "/GO_all.csv"), quote = F, row.names = F)
+          write.table(kkd_all@result, file = paste0(dir, "/GO_all.tsv"),sep = "\t",row.names = F)
           pdf(file = paste0(dir, "/GO_all.pdf"), width = 6, height = 7)
           p5 <- dotplot(kkd_all, showCategory = 5, split = "ONTOLOGY") + facet_grid(ONTOLOGY ~ ., scale = 'free', space = 'free')
           print(p5)
@@ -271,7 +271,7 @@ run_enrichment_analysis <- function(data, OrgDb, dir,
       if (do_all_KEGG && !is.null(kk_all)) {
         tryCatch({
           message("  → 输出全部基因KEGG分析结果...")
-          write.csv(kk_all@result, file = paste0(dir, "/KEGG_all.csv"), quote = F, row.names = F)
+          write.table(kk_all@result, file = paste0(dir, "/KEGG_all.tsv"),sep = "\t",row.names = F)
           pdf(file = paste0(dir, "/KEGG_all.pdf"), width = 6, height = 5)
           p6 <- dotplot(kk_all)
           print(p6)
